@@ -8,34 +8,40 @@ load_dotenv()
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from state import ResearchState
-from nodes.planner import planner_node
-from nodes.search  import search_node
-from nodes.rag     import rag_node
-from nodes.critic  import critic_node, route_after_critic
-from nodes.writer  import writer_node
+from nodes.planner        import planner_node
+from nodes.search         import search_node
+from nodes.rag            import rag_node
+from nodes.critic         import critic_node, route_after_critic
+from nodes.query_transform import query_transform_node
+from nodes.writer         import writer_node
 
 
 def _build_workflow() -> StateGraph:
     workflow = StateGraph(ResearchState)
 
     # ── Nodes ──────────────────────────────────────────────────────
-    workflow.add_node("planner", planner_node)
-    workflow.add_node("search",  search_node)
-    workflow.add_node("rag",     rag_node)
-    workflow.add_node("critic",  critic_node)
-    workflow.add_node("writer",  writer_node)
+    workflow.add_node("planner",          planner_node)
+    workflow.add_node("search",           search_node)
+    workflow.add_node("rag",              rag_node)
+    workflow.add_node("critic",           critic_node)
+    workflow.add_node("query_transform",  query_transform_node)
+    workflow.add_node("writer",           writer_node)
 
     # ── Edges ───────────────────────────────────────────────────────
     workflow.set_entry_point("planner")
-    workflow.add_edge("planner", "search")
-    workflow.add_edge("search",  "rag")
-    workflow.add_edge("rag",     "critic")
+    workflow.add_edge("planner",         "search")
+    workflow.add_edge("search",          "rag")
+    workflow.add_edge("rag",             "critic")
+
+    # When Critic routes "search", go to QueryTransform first (rewrite queries),
+    # then Search — directly from Self-Corrective RAG pattern in course material
     workflow.add_conditional_edges(
         "critic",
         route_after_critic,
-        {"search": "search", "writer": "writer"},
+        {"search": "query_transform", "writer": "writer"},
     )
-    workflow.add_edge("writer", END)
+    workflow.add_edge("query_transform", "search")
+    workflow.add_edge("writer",          END)
     return workflow
 
 

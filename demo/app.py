@@ -33,11 +33,12 @@ ss = st.session_state  # shorthand
 
 # ── Node metadata ─────────────────────────────────────────────────
 _META = {
-    "planner": ("🧠", "Planner"),
-    "search":  ("🔍", "Search"),
-    "rag":     ("📄", "RAG"),
-    "critic":  ("⚖️", "Critic"),
-    "writer":  ("✍️", "Writer"),
+    "planner":          ("🧠", "Planner"),
+    "search":           ("🔍", "Search"),
+    "rag":              ("📄", "RAG"),
+    "critic":           ("⚖️", "Critic"),
+    "query_transform":  ("🔄", "Query Transform"),
+    "writer":           ("✍️", "Writer"),
 }
 
 # ── Sidebar ───────────────────────────────────────────────────────
@@ -104,12 +105,15 @@ def _node_text(node_name: str, updates: dict) -> str:
     if node_name == "rag":
         ctx = len(updates.get("rag_context", ""))
         return f"✅ {icon} **{name}** — {ctx:,} chars from PDF"
+    if node_name == "query_transform":
+        n = len(updates.get("search_queries", []))
+        return f"✅ {icon} **{name}** — rewrote into {n} targeted queries"
     if node_name == "critic":
         score = updates.get("score", 0)
         ss.iter_scores.append(score)
         done  = score >= 6.0 or len(ss.iter_scores) >= 3
         dot   = "🟢" if score >= 7 else "🟡" if score >= 5 else "🔴"
-        arrow = "→ writing" if done else "→ looping"
+        arrow = "→ writing" if done else "→ query rewrite"
         return f"{dot} {icon} **{name}** — {score}/10 · {arrow}"
     if node_name == "writer":
         memo = updates.get("memo", "")
