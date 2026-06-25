@@ -1,0 +1,33 @@
+# ── Environment & Secrets ──────────────────────────────────────────
+.env
+*.env
+
+# ── Python ─────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ── Data & Databases ───────────────────────────────────────────────
+data/pdfs/*.pdf        # earnings PDFs can be large — share via Drive/link
+chroma_db/             # local vector store, each member rebuilds locally
+*.db
+*.sqlite
+
+# ── IDE ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ── OS ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
