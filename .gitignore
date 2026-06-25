@@ -15,8 +15,7 @@ venv/
 env/
 
 # ── Data & Databases ───────────────────────────────────────────────
-data/
-**/data/**
+data/pdfs/.gitkeep
 chroma_db/             # local vector store, each member rebuilds locally
 **/chroma_db/**
 *.sqlite3

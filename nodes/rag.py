@@ -3,8 +3,39 @@
 # and retrieves relevant context for the current ticker.
 
 import os
+import re
 from dotenv import load_dotenv
 load_dotenv()
+
+# Maps common company names / partial names → ticker symbol.
+# Allows flexible PDF filenames like "apple_10k.pdf" or "tesla_annual_report.pdf".
+_ALIASES: dict[str, str] = {
+    "apple":     "AAPL",
+    "tesla":     "TSLA",
+    "microsoft": "MSFT",
+    "google":    "GOOGL",
+    "alphabet":  "GOOGL",
+    "amazon":    "AMZN",
+    "nvidia":    "NVDA",
+    "meta":      "META",
+    "facebook":  "META",
+    "netflix":   "NFLX",
+    "samsung":   "005930",
+}
+
+def _extract_ticker(filename: str) -> str:
+    """Extract ticker from filename, supporting both ticker-prefix and company-name formats."""
+    stem = os.path.splitext(filename)[0]                  # remove .pdf
+    parts = re.split(r"[_\-\s]+", stem)                   # split on _ - space
+    for part in parts:
+        upper = part.upper()
+        # Exact ticker match: 1–5 uppercase letters
+        if re.fullmatch(r"[A-Z]{1,5}", upper):
+            return upper
+        # Company name alias match
+        if part.lower() in _ALIASES:
+            return _ALIASES[part.lower()]
+    return parts[0].upper()                               # fallback: first segment
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
@@ -38,8 +69,7 @@ def _load_vectorstore() -> Chroma:
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=80)
 
     for fname in pdf_files:
-        # Extract ticker from filename: "AAPL_10k_2024.pdf" → "AAPL"
-        ticker_tag = fname.split("_")[0].upper()
+        ticker_tag = _extract_ticker(fname)
         path = os.path.join(PDF_DIR, fname)
         loader = PyPDFLoader(path)
         pages  = loader.load()
