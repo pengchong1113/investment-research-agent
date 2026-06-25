@@ -15,8 +15,13 @@ venv/
 env/
 
 # ── Data & Databases ───────────────────────────────────────────────
-data/pdfs/*.pdf        # earnings PDFs can be large — share via Drive/link
+data/
+**/data/**
 chroma_db/             # local vector store, each member rebuilds locally
+**/chroma_db/**
+*.sqlite3
+*.bin
+*.pickle
 *.db
 *.sqlite
 

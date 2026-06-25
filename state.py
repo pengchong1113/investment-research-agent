@@ -27,6 +27,9 @@ class ResearchState(TypedDict):
     critique: str                                    # critic's reasoning
     iteration: int                                   # how many loops so far
 
+    # ── Human-in-the-Loop feedback ─────────────────────────────────
+    human_feedback: str                              # injected before Writer via update_state
+
     # ── Writer output (Member 4) ────────────────────────────────────
     memo: str                                        # final investment memo
 

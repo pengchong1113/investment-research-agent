@@ -2,21 +2,16 @@
 # Scores the completeness of gathered research.
 # If score < THRESHOLD and iterations < MAX, routes back to search.
 
-import os
 from typing import Literal
-from dotenv import load_dotenv
-load_dotenv()
 
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from state import ResearchState
-
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+from llm import llm
 
 MAX_ITERATIONS = 3
-SCORE_THRESHOLD = 7.0
+SCORE_THRESHOLD = 6.0
 
 
 # ── Structured output schema ───────────────────────────────────────

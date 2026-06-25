@@ -14,7 +14,7 @@ User Input (ticker)
 │ Planner │────▶│ Search │────▶│ RAG │────▶│ Critic │
 └─────────┘     └────────┘     └─────┘     └───┬────┘
                      ▲                          │
-                     │   score < 7.0            │  score >= 7.0
+                     │   score < 6.0            │  score >= 6.0
                      └──────────────────────────┤
                                                 │
                                                 ▼
@@ -53,12 +53,31 @@ cp .env.example .env
 # Edit .env and add your GOOGLE_API_KEY
 
 # 5. Add earnings PDFs (optional but recommended)
-# Drop any company 10-K or earnings PDFs into data/pdfs/
-# e.g. Apple_10K_2024.pdf, Tesla_Q4_2024.pdf
+# Filename MUST start with the ticker symbol followed by underscore:
+#   AAPL_10k_2024.pdf   ✅
+#   TSLA_annual_2024.pdf ✅
+#   apple_report.pdf    ❌  (won't be linked to AAPL)
+#
+# Drop PDFs into data/pdfs/ then delete chroma_db/ to rebuild the index.
 
-# 6. Run the demo
+# 6. Run the CLI demo
 python demo/run_demo.py
+
+# 7. Or launch the Streamlit web UI
+streamlit run demo/app.py
 ```
+
+## PDF Naming Convention
+
+The RAG node extracts the ticker from the filename prefix (split on `_`):
+
+| Filename | Detected ticker |
+|---|---|
+| `AAPL_10k_2024.pdf` | `AAPL` |
+| `TSLA_annual_report.pdf` | `TSLA` |
+| `MSFT_10k_2025.pdf` | `MSFT` |
+
+When you query a ticker that has no matching PDF, the pipeline falls back gracefully to web-search-only mode and notes this in the memo.
 
 ## Project Structure
 
@@ -103,7 +122,7 @@ git push origin feature/rag
   across loop iterations instead of being overwritten.
 - **Max iterations guard**: Critic loops back at most `MAX_ITERATIONS=3` times to
   prevent infinite loops.
-- **Score threshold**: `SCORE_THRESHOLD=7.0` — tune this in `nodes/critic.py`.
+- **Score threshold**: `SCORE_THRESHOLD=6.0` — tune this in `nodes/critic.py`.
 - **RAG is optional**: If no PDFs are in `data/pdfs/`, the RAG node returns an empty
   context and the pipeline still runs on web search results alone.
 
