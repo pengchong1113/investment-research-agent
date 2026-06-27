@@ -103,8 +103,9 @@ def rag_node(state: ResearchState) -> dict:
     if db is None:
         return {"rag_context": "No earnings documents available."}
 
-    ticker = state["ticker"]
-    query  = f"{ticker} earnings revenue profit outlook"
+    ticker  = state["ticker"]
+    queries = state.get("queries") or []
+    query   = " ".join(queries) if queries else f"{ticker} earnings revenue profit outlook"
 
     # Filter by ticker metadata — only return chunks from this company's PDFs
     docs = db.similarity_search(query, k=4, filter={"ticker": ticker})
