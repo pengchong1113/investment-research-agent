@@ -96,6 +96,9 @@ section[data-testid="stSidebar"] img {
     color: #1565c0 !important; font-weight: 600 !important; background: white !important;
 }
 .stAlert { border-radius: 10px !important; }
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.running-card { animation: blink 1.2s ease-in-out infinite; }
 </style>""", unsafe_allow_html=True)
 
 # ── Session state defaults ────────────────────────────────────────
@@ -202,18 +205,21 @@ with c3:
 # ── Node HTML card ────────────────────────────────────────────────
 def _node_card(state: str, icon: str, name: str, detail: str) -> str:
     cfg = {
-        "waiting": ("#f8f9fc", "#c5cae9", "#9e9e9e", "#bdbdbd", "⏳"),
-        "done":    ("#f0fdf4", "#4ade80", "#166534", "#555",    "✅"),
-        "green":   ("#f0fdf4", "#4ade80", "#166534", "#555",    "🟢"),
-        "yellow":  ("#fefce8", "#facc15", "#854d0e", "#555",    "🟡"),
-        "red":     ("#fef2f2", "#f87171", "#991b1b", "#555",    "🔴"),
+        "waiting": ("#f8f9fc", "#c5cae9", "#9e9e9e", "#bdbdbd", "⏳", False),
+        "running": ("#eff6ff", "#3b82f6", "#1d4ed8", "#555",    "⚙️",  True),
+        "done":    ("#f0fdf4", "#4ade80", "#166534", "#555",    "✅",  False),
+        "green":   ("#f0fdf4", "#4ade80", "#166534", "#555",    "🟢",  False),
+        "yellow":  ("#fefce8", "#facc15", "#854d0e", "#555",    "🟡",  False),
+        "red":     ("#fef2f2", "#f87171", "#991b1b", "#555",    "🔴",  False),
     }
-    bg, border, title_c, detail_c, prefix = cfg.get(state, cfg["waiting"])
+    bg, border, title_c, detail_c, prefix, animate = cfg.get(state, cfg["waiting"])
+    cls = ' class="running-card"' if animate else ""
+    dots = ' <span style="letter-spacing:2px;">···</span>' if animate else ""
     return (
-        f'<div style="background:{bg};border-left:3px solid {border};'
+        f'<div{cls} style="background:{bg};border-left:3px solid {border};'
         f'border-radius:0 8px 8px 0;padding:9px 14px;margin:4px 0;">'
         f'<div style="font-weight:600;color:{title_c};font-size:0.88em;">'
-        f'{prefix} {icon} {name}</div>'
+        f'{prefix} {icon} {name}{dots}</div>'
         f'<div style="color:{detail_c};font-size:0.78em;margin-top:1px;">{detail}</div>'
         f'</div>'
     )
@@ -347,6 +353,31 @@ if run_btn and ticker_input:
         right_area = st.empty()
         right_area.info("Pipeline is running… memo will appear here after the human review step.")
 
+    # Mark first node as running before stream starts
+    slots["planner"].markdown(
+        _node_card("running", "🧠", "Planner", "generating queries…"),
+        unsafe_allow_html=True,
+    )
+
+    def _set_next_running(node_name: str, updates: dict):
+        """After a node completes, mark the next expected node as running."""
+        nxt = {
+            "planner":        "search",
+            "search":         "rag",
+            "rag":            "critic",
+            "query_transform": "search",
+        }.get(node_name)
+        if node_name == "critic":
+            score = updates.get("score", 0)
+            done  = score >= 6.0 or len(ss.iter_scores) >= 3
+            nxt   = "writer" if done else "query_transform"
+        if nxt and nxt in slots:
+            icon, name = _META[nxt]
+            slots[nxt].markdown(
+                _node_card("running", icon, name, "running…"),
+                unsafe_allow_html=True,
+            )
+
     try:
         for step in graph_hitl.stream(initial_state, thread, stream_mode="updates"):
             for node_name, updates in step.items():
@@ -358,6 +389,7 @@ if run_btn and ticker_input:
                     m_iter.metric("Iterations", updates.get("iteration", 1))
                 elif node_name == "critic":
                     m_score.metric("Score", f"{updates.get('score', 0)}/10")
+                _set_next_running(node_name, updates)
     except Exception as e:
         _show_api_error(e)
         ss.phase = "idle"
@@ -470,16 +502,46 @@ if ss.phase == "paused":
             graph_hitl.update_state(thread, {"human_feedback": fb_text})
             st.info(f"📝 Analyst instruction injected: _{fb_text[:100]}{'…' if len(fb_text) > 100 else ''}_")
 
-        st.markdown("**✍️ Generating memo…**")
+        # Show writer running card immediately
+        w_icon, w_name = _META["writer"]
+        ss.node_texts["writer"] = _node_card("running", w_icon, w_name, "writing memo…")
+
+        st.markdown("**✍️ Writing memo…**")
         memo_live = st.empty()
+        memo_live.markdown(
+            '<div style="color:#9e9e9e;font-style:italic;font-size:0.9em;">Starting ···</div>',
+            unsafe_allow_html=True,
+        )
+
+        streamed = ""
 
         try:
-            for step in graph_hitl.stream(None, thread, stream_mode="updates"):
-                for node_name, updates in step.items():
-                    html = _node_html(node_name, updates)
-                    ss.node_texts[node_name] = html
-                    if node_name == "writer":
-                        memo_live.markdown(ss.memo)
+            for mode, data in graph_hitl.stream(
+                None, thread, stream_mode=["updates", "messages"]
+            ):
+                if mode == "messages":
+                    chunk, meta = data
+                    if (
+                        meta.get("langgraph_node") == "writer"
+                        and hasattr(chunk, "content")
+                        and chunk.content
+                    ):
+                        streamed += chunk.content
+                        memo_live.markdown(
+                            f'<div style="font-size:0.91em;line-height:1.8;'
+                            f'color:#212121;white-space:pre-wrap;">{streamed}'
+                            f'<span style="animation:blink 0.7s infinite;'
+                            f'font-weight:bold;color:#1565c0;">▌</span></div>',
+                            unsafe_allow_html=True,
+                        )
+                elif mode == "updates":
+                    for node_name, updates in data.items():
+                        html = _node_html(node_name, updates)
+                        ss.node_texts[node_name] = html
+                        if node_name == "writer":
+                            # Final state update — use official memo from state
+                            ss.memo = updates.get("memo", streamed)
+                            memo_live.markdown(ss.memo)
         except Exception as e:
             _show_api_error(e)
             ss.phase = "idle"
