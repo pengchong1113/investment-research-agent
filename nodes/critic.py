@@ -11,7 +11,7 @@ from state import ResearchState
 from llm import llm
 
 MAX_ITERATIONS = 3
-SCORE_THRESHOLD = 6.0
+SCORE_THRESHOLD = 7.0
 
 
 # ── Structured output schema ───────────────────────────────────────
