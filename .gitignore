@@ -16,13 +16,6 @@ env/
 
 # ── Data & Databases ───────────────────────────────────────────────
 data/pdfs/.gitkeep
-chroma_db/             # local vector store, each member rebuilds locally
-**/chroma_db/**
-*.sqlite3
-*.bin
-*.pickle
-*.db
-*.sqlite
 
 # ── IDE ────────────────────────────────────────────────────────────
 .vscode/
