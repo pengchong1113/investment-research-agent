@@ -1,17 +1,11 @@
 # Member 4 — Writer Node
 # Synthesises all gathered research into a structured investment memo.
 
-import os
-from dotenv import load_dotenv
-load_dotenv()
-
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from state import ResearchState
-
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+from llm import llm
 
 WRITER_PROMPT = ChatPromptTemplate.from_messages([
     ("system", """You are a professional equity research analyst at a top investment bank.
@@ -34,19 +28,25 @@ Keep it professional, factual, and under 600 words."""),
 --- Earnings & Fundamentals (from filings) ---
 {rag_context}
 
-Write the investment memo now."""),
+--- Analyst Notes (human reviewer instructions) ---
+{human_feedback}
+
+Write the investment memo now. If Analyst Notes are provided, follow them carefully."""),
 ])
 
 writer_chain = WRITER_PROMPT | llm | StrOutputParser()
 
 
 def writer_node(state: ResearchState) -> dict:
-    """Generate the final investment memo."""
-    search_text = "\n\n".join(state.get("search_results", []))
+    """Generate the final investment memo, respecting any human feedback."""
+    search_text    = "\n\n".join(state.get("search_results", []))
+    human_feedback = state.get("human_feedback", "").strip()
     memo = writer_chain.invoke({
         "ticker":         state["ticker"],
         "search_results": search_text or "No web data available.",
         "rag_context":    state.get("rag_context", "No earnings data available."),
+        "human_feedback": human_feedback or "None — proceed with standard analysis.",
     })
-    print(f"[Writer] Memo generated ({len(memo)} chars)")
+    print(f"[Writer] Memo generated ({len(memo)} chars)"
+          + (f" [human note: {human_feedback[:60]}...]" if human_feedback else ""))
     return {"memo": memo}

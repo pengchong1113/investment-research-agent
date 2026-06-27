@@ -27,6 +27,7 @@ def run(ticker: str):
         "iteration":      0,
         "memo":           "",
         "messages":       [],
+        "human_feedback": "",
     }
 
     # Stream events so we can see each node firing in real time

@@ -1,17 +1,11 @@
 # Member 3 — Planner Node
 # Takes a stock ticker and decomposes it into specific search queries.
 
-import os
-from dotenv import load_dotenv
-load_dotenv()
-
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
 from state import ResearchState
-
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+from llm import llm
 
 
 class PlannerOutput(BaseModel):
