@@ -530,7 +530,7 @@ if ss.phase == "paused":
                         memo_live.markdown(
                             f'<div style="font-size:0.91em;line-height:1.8;'
                             f'color:#212121;white-space:pre-wrap;">{streamed}'
-                            f'<span style="animation:blink 0.7s infinite;'
+                            f'<span style="animation:blink 1.2s infinite;'
                             f'font-weight:bold;color:#1565c0;">▌</span></div>',
                             unsafe_allow_html=True,
                         )
