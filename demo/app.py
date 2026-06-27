@@ -276,6 +276,19 @@ def _score_chart(scores: list, ticker: str):
     st.plotly_chart(fig, use_container_width=True)
 
 
+# ── API error helper ─────────────────────────────────────────────
+def _show_api_error(e: Exception):
+    msg = str(e)
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+        st.error(
+            "🚫 **Gemini API quota exhausted.**\n\n"
+            "The free tier resets daily at **UTC 00:00**. "
+            "Please try again after the reset, or use a different API key."
+        )
+    else:
+        st.error(f"⚠️ Pipeline error: {msg}")
+
+
 # ── Section card helpers ──────────────────────────────────────────
 def _card_start(title: str, subtitle: str = ""):
     sub = f'<div style="color:#78909c;font-size:0.8em;margin-top:2px;">{subtitle}</div>' if subtitle else ""
@@ -334,16 +347,21 @@ if run_btn and ticker_input:
         right_area = st.empty()
         right_area.info("Pipeline is running… memo will appear here after the human review step.")
 
-    for step in graph_hitl.stream(initial_state, thread, stream_mode="updates"):
-        for node_name, updates in step.items():
-            html = _node_html(node_name, updates)
-            if node_name in slots:
-                slots[node_name].markdown(html, unsafe_allow_html=True)
-            ss.node_texts[node_name] = html
-            if node_name == "search":
-                m_iter.metric("Iterations", updates.get("iteration", 1))
-            elif node_name == "critic":
-                m_score.metric("Score", f"{updates.get('score', 0)}/10")
+    try:
+        for step in graph_hitl.stream(initial_state, thread, stream_mode="updates"):
+            for node_name, updates in step.items():
+                html = _node_html(node_name, updates)
+                if node_name in slots:
+                    slots[node_name].markdown(html, unsafe_allow_html=True)
+                ss.node_texts[node_name] = html
+                if node_name == "search":
+                    m_iter.metric("Iterations", updates.get("iteration", 1))
+                elif node_name == "critic":
+                    m_score.metric("Score", f"{updates.get('score', 0)}/10")
+    except Exception as e:
+        _show_api_error(e)
+        ss.phase = "idle"
+        st.stop()
 
     with left:
         st.divider()
@@ -455,12 +473,17 @@ if ss.phase == "paused":
         st.markdown("**✍️ Generating memo…**")
         memo_live = st.empty()
 
-        for step in graph_hitl.stream(None, thread, stream_mode="updates"):
-            for node_name, updates in step.items():
-                html = _node_html(node_name, updates)
-                ss.node_texts[node_name] = html
-                if node_name == "writer":
-                    memo_live.markdown(ss.memo)
+        try:
+            for step in graph_hitl.stream(None, thread, stream_mode="updates"):
+                for node_name, updates in step.items():
+                    html = _node_html(node_name, updates)
+                    ss.node_texts[node_name] = html
+                    if node_name == "writer":
+                        memo_live.markdown(ss.memo)
+        except Exception as e:
+            _show_api_error(e)
+            ss.phase = "idle"
+            st.stop()
 
         ss.phase = "done"
         st.rerun()

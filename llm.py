@@ -22,6 +22,6 @@ _rate_limiter = InMemoryRateLimiter(
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
-    max_retries=3,
+    max_retries=1,
     rate_limiter=_rate_limiter,
 )
