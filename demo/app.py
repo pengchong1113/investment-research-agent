@@ -769,29 +769,15 @@ if ss.phase == "paused":
         )
         ss.node_texts["writer"] = _node_card("running", *_META["writer"], "writing memo…")
 
-        streamed = ""
         try:
-            for mode, data in graph_hitl.stream(None, thread, stream_mode=["updates", "messages"]):
-                if mode == "messages":
-                    chunk, meta = data
-                    if (meta.get("langgraph_node") == "writer"
-                            and hasattr(chunk, "content") and chunk.content):
-                        streamed += chunk.content
-                        memo_live.markdown(
-                            f'<div style="font-size:.91em;line-height:1.8;color:#212121;'
-                            f'white-space:pre-wrap;">{streamed}'
-                            f'<span style="animation:pulse 1.2s infinite;font-weight:bold;'
-                            f'color:#3b82f6;">▌</span></div>',
-                            unsafe_allow_html=True,
-                        )
-                elif mode == "updates":
-                    for node_name, updates in data.items():
-                        if node_name not in _META:
-                            continue
-                        html = _node_html(node_name, updates)
-                        ss.node_texts[node_name] = html
-                        if node_name == "writer":
-                            memo_live.markdown(ss.memo)
+            for step in graph_hitl.stream(None, thread, stream_mode="updates"):
+                for node_name, updates in step.items():
+                    if node_name not in _META:
+                        continue
+                    html = _node_html(node_name, updates)
+                    ss.node_texts[node_name] = html
+                    if node_name == "writer":
+                        memo_live.markdown(ss.memo)
         except Exception as e:
             _show_api_error(e)
             ss.phase = "idle"
