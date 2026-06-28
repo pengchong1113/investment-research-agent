@@ -212,6 +212,7 @@ section[data-testid="stSidebar"] img:hover { transform:scale(1.03); }
 .step:hover { transform:translateX(3px); box-shadow:var(--shadow-md); }
 .step.s-done  { animation:pop .45s cubic-bezier(.2,.8,.2,1) both; }
 .step.s-wait  { opacity:.72; }
+.step.s-run   { border-color:var(--brand) !important; background:rgba(59,130,246,.06) !important; animation:pulse 1.4s ease-in-out infinite; }
 .step-badge {
     flex:0 0 34px; width:34px; height:34px; border-radius:11px; display:flex; align-items:center;
     justify-content:center; font-size:1rem; box-shadow:inset 0 0 0 1px rgba(255,255,255,.4);
@@ -308,19 +309,21 @@ _META = {
 # ════════════════════════════════════════════════════════════════════
 def _node_card(state: str, icon: str, name: str, detail: str) -> str:
     cfg = {
-        "waiting": ("#f1f5f9", "#94a3b8", "s-wait", "⏳"),
-        "done":    ("rgba(16,185,129,.12)",  "#10b981", "s-done", "✓"),
-        "green":   ("rgba(16,185,129,.12)",  "#10b981", "s-done", "🟢"),
-        "yellow":  ("rgba(245,158,11,.14)",  "#f59e0b", "s-done", "🟡"),
-        "red":     ("rgba(239,68,68,.12)",   "#ef4444", "s-done", "🔴"),
+        "waiting": ("#f1f5f9",               "#94a3b8", "s-wait", "⏳"),
+        "running": ("rgba(59,130,246,.15)",   "#3b82f6", "s-run",  "⚙️"),
+        "done":    ("rgba(16,185,129,.12)",   "#10b981", "s-done", "✓"),
+        "green":   ("rgba(16,185,129,.12)",   "#10b981", "s-done", "🟢"),
+        "yellow":  ("rgba(245,158,11,.14)",   "#f59e0b", "s-done", "🟡"),
+        "red":     ("rgba(239,68,68,.12)",    "#ef4444", "s-done", "🔴"),
     }
     badge_bg, badge_fg, anim, mark = cfg.get(state, cfg["waiting"])
+    spinner = '<span class="spinner"></span>' if state == "running" else ""
     return (
         f'<div class="step {anim}">'
         f'<div class="step-badge" style="background:{badge_bg};color:{badge_fg};">{icon}</div>'
         f'<div style="flex:1;">'
         f'<div class="step-name">{name}</div>'
-        f'<div class="step-detail">{detail}</div>'
+        f'<div class="step-detail">{spinner}{detail}</div>'
         f'</div></div>'
     )
 
@@ -618,6 +621,22 @@ if run_btn and ticker_input:
         right_area = st.empty()
         right_area.info("Pipeline is running… the memo will appear here after the human-review step.")
 
+    def _set_next_running(node_name: str, updates: dict):
+        nxt = {"planner": "search", "search": "rag", "rag": "critic",
+               "query_transform": "search"}.get(node_name)
+        if node_name == "critic":
+            score = updates.get("score", 0)
+            done  = score >= 7.0 or len(ss.iter_scores) >= 3
+            nxt   = "writer" if done else "query_transform"
+        if nxt and nxt in slots:
+            icon, name = _META[nxt]
+            slots[nxt].markdown(_node_card("running", icon, name, "running…"), unsafe_allow_html=True)
+
+    # Mark Planner as running before stream starts
+    slots["planner"].markdown(
+        _node_card("running", *_META["planner"], "generating queries…"), unsafe_allow_html=True
+    )
+
     try:
         for step in graph_hitl.stream(initial_state, thread, stream_mode="updates"):
             for node_name, updates in step.items():
@@ -631,6 +650,7 @@ if run_btn and ticker_input:
                     m_iter.markdown(_kpi_tile("Iterations", updates.get("iteration", 1)), unsafe_allow_html=True)
                 elif node_name == "critic":
                     m_score.markdown(_score_gauge(updates.get("score", 0)), unsafe_allow_html=True)
+                _set_next_running(node_name, updates)
     except Exception as e:
         _show_api_error(e)
         ss.phase = "idle"
@@ -742,16 +762,36 @@ if ss.phase == "paused":
 
         st.markdown('<div class="lbl">✍️ Generating memo…</div>', unsafe_allow_html=True)
         memo_live = st.empty()
+        memo_live.markdown(
+            '<div style="color:#94a3b8;font-size:.88em;font-style:italic;">'
+            '<span class="spinner"></span>Writing…</div>',
+            unsafe_allow_html=True,
+        )
+        ss.node_texts["writer"] = _node_card("running", *_META["writer"], "writing memo…")
 
+        streamed = ""
         try:
-            for step in graph_hitl.stream(None, thread, stream_mode="updates"):
-                for node_name, updates in step.items():
-                    if node_name not in _META:    # skip __interrupt__ & internal nodes
-                        continue
-                    html = _node_html(node_name, updates)
-                    ss.node_texts[node_name] = html
-                    if node_name == "writer":
-                        memo_live.markdown(ss.memo)
+            for mode, data in graph_hitl.stream(None, thread, stream_mode=["updates", "messages"]):
+                if mode == "messages":
+                    chunk, meta = data
+                    if (meta.get("langgraph_node") == "writer"
+                            and hasattr(chunk, "content") and chunk.content):
+                        streamed += chunk.content
+                        memo_live.markdown(
+                            f'<div style="font-size:.91em;line-height:1.8;color:#212121;'
+                            f'white-space:pre-wrap;">{streamed}'
+                            f'<span style="animation:pulse 1.2s infinite;font-weight:bold;'
+                            f'color:#3b82f6;">▌</span></div>',
+                            unsafe_allow_html=True,
+                        )
+                elif mode == "updates":
+                    for node_name, updates in data.items():
+                        if node_name not in _META:
+                            continue
+                        html = _node_html(node_name, updates)
+                        ss.node_texts[node_name] = html
+                        if node_name == "writer":
+                            memo_live.markdown(ss.memo)
         except Exception as e:
             _show_api_error(e)
             ss.phase = "idle"
