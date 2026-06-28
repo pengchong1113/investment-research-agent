@@ -21,7 +21,8 @@ _rate_limiter = InMemoryRateLimiter(
 )
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+    model="gemini-3.1-flash-lite",
+    temperature=0.2,             # low temperature → factual, consistent research output
     max_retries=1,
     rate_limiter=_rate_limiter,
 )
