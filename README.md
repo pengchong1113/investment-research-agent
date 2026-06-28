@@ -6,38 +6,43 @@ A self-correcting AI pipeline built with LangGraph that researches a stock ticke
 
 ```
 User Input (ticker)
-    │
-    ▼
-┌─────────┐     ┌────────┐     ┌─────┐     ┌────────┐
-│ Planner │────▶│ Search │────▶│ RAG │────▶│ Critic │
-└─────────┘     └────────┘     └─────┘     └───┬────┘
-                     ▲                          │
-                     │   score < 6.0            │  score ≥ 6.0
-                     └──────────────────────────┤
-                                                │
-                                          ⏸ Human Review
-                                                │
-                                                ▼
-                                          ┌────────┐
-                                          │ Writer │────▶ END
-                                          └────────┘
+        │
+        ▼
+   ┌─────────┐     ┌────────┐     ┌─────┐     ┌────────┐
+   │ Planner │────▶│ Search │────▶│ RAG │────▶│ Critic │
+   └─────────┘     └────────┘     └─────┘     └───┬────┘
+                        ▲                          │
+                        │                          │  score ≥ 7.0
+              ┌─────────┴────────┐  score < 7.0    │  (or 3 loops)
+              │  Query Transform │◀────────────────┤
+              └──────────────────┘                 │
+                                                    ▼
+                                            ⏸ Human Review
+                                                    │
+                                                    ▼
+                                              ┌────────┐
+                                              │ Writer │────▶ END
+                                              └────────┘
 ```
+
+When the Critic scores below 7.0, the loop rewrites the queries (Query Transform) and searches again — up to a maximum of 3 iterations, after which it proceeds to the Writer regardless.
 
 | Node | What it does |
 |---|---|
-| Planner | Decomposes ticker into 3–5 targeted search queries |
-| Search | DuckDuckGo web search via `@tool` decorator |
-| RAG | Retrieves relevant chunks from earnings PDFs via ChromaDB |
-| Critic | Scores research completeness (0–10), routes back or proceeds |
-| Writer | Generates structured investment memo via LCEL chain |
+| Planner | Decomposes ticker into exactly 5 targeted search queries (one per category: news, financials, competitors, risks, valuation) |
+| Search | Web search via `@tool` decorator — Tavily (primary) with DuckDuckGo fallback, per-query 15s timeout |
+| RAG | Retrieves relevant chunks from earnings PDFs via ChromaDB, filtered by ticker |
+| Critic | Scores research completeness (0–10) across 5 dimensions; routes back or proceeds |
+| Query Transform | On loop-back, rewrites the search queries using the Critic's missing topics |
+| Writer | Generates a structured investment memo (ending in BUY / HOLD / SELL) via LCEL chain |
 
 ## Stack
 
 - **LangGraph** — StateGraph with conditional edges and self-corrective loop
-- **LangChain** — LCEL chains, `@tool`, `ToolNode`, structured output (Pydantic)
-- **Gemini 2.5 Flash** — LLM for Planner, Critic, Writer nodes
-- **ChromaDB + HuggingFace Embeddings** — local RAG over earnings PDFs
-- **DuckDuckGo** — web search, no API key required
+- **LangChain** — LCEL chains, `@tool`, structured output (Pydantic)
+- **Gemini 3.1 Flash Lite** (temperature 0.2) — shared LLM for Planner, Critic, Query Transform, and Writer nodes
+- **ChromaDB + HuggingFace Embeddings** (`all-MiniLM-L6-v2`) — local RAG over earnings PDFs
+- **Tavily Search API** (primary) with **DuckDuckGo** fallback — web search
 - **Streamlit + Plotly** — interactive frontend with real-time progress
 - **MemorySaver** — LangGraph checkpointer enabling Human-in-the-Loop
 
@@ -54,7 +59,8 @@ python -m venv .venv
 pip install -r requirements.txt
 
 cp .env.example .env
-# Add your GOOGLE_API_KEY to .env
+# Add your GOOGLE_API_KEY (required) and TAVILY_API_KEY (recommended — primary
+# search backend; without it, search falls back to DuckDuckGo) to .env
 ```
 
 ## Running
@@ -92,6 +98,7 @@ investment-research-agent/
 │   ├── search.py
 │   ├── rag.py
 │   ├── critic.py
+│   ├── query_transform.py
 │   └── writer.py
 ├── demo/
 │   ├── app.py        # Streamlit frontend
